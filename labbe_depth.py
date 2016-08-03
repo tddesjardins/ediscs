@@ -68,10 +68,7 @@ def dophot(data,x,y,rad):
 
     phot_table=phot.aperture_photometry(data,apertures)
     sum=phot_table['aperture_sum']
-#    (sum,maxpix,mean,std)=(phot_table['aperture_sum'],phot_table['aperture_max'],phot_table['aperture_mean'],
-#                           phot_table['aperture_std'])
 
-#    return (sum,maxpix,mean,std)
     return sum
 
 def checkoverlap(x,y,flags,rad):
@@ -99,7 +96,7 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
     if os.path.exists(outplot):
         os.remove(outplot)
 
-    #Get image header and from that get the X- and Y-axis sizes of the image
+    #Get image data and from that get the X- and Y-axis sizes of the image
     #The calls to the warnings module come from the PyFITS user manual and
     #supress the warnings from PyFITS concerning non-standard keywords in
     #DJ's image headers
@@ -144,6 +141,8 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
                 flags[i]=0
 
     #Logarithmically space the aperture radii and then perform the photometry
+    #Set up flags for the apertures (0 = aperture should not be used, 1 = aperture
+    #is good)
     radii=np.logspace(np.log10(aprange_pix[0]),np.log10(aprange_pix[1]),nsamp)
     photometry=np.zeros((len(radii),len(newx)),dtype=np.float)
     maximum=np.zeros((len(radii),len(newx)),dtype=np.float)
@@ -153,7 +152,6 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
         phot=dophot(data,newx,newy,radii[i])
         det=dophot(detMap,newx,newy,radii[i])
         photometry[i,:]=phot
-#        pdb.set_trace()
         for j in range(len(cenx)):
             if flags[j] == 1.:
                 if det[j] > 0.0:
@@ -162,14 +160,12 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
                     flags[j]=0.
                 if math.isnan(phot[j]) == True:
                     flags[j]=0.
-#                if phot[1][j] >= 1.0:
-#                    flags[j]=0.
-#                elif phot[1][j] == 0. and phot[2][j] == 0.:
-#                    flags[j]=0.
-#                elif phot[1][j] >= (phot[2][j]+(phot[3][j]*level)):
-#                    flags[j]=0.
 
     good=np.where(flags == 1.0)
+    #Write out the aperture coordinates to a save file if
+    #someone wants to see where the (good) apertures are
+    #located. Good for verifying they aren't near sources
+    #and adequately sample the whole image
     np.savetxt('test.cdt', np.c_[newx[good], newy[good]])
 
     #Make and plot the histograms, then fit each with a Gaussian
@@ -183,36 +179,19 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
     good=np.where(flags == 1.)
     plt.figure(1,figsize=(8.5,11))
     plt.subplot(211)
-#    if persec == False:
-#        hrange=[-500.0,500.0]
-#    else:
-#        hrange=[-2.0,2.0]
+
     for i in range(len(radii)):
         maxgood = maxrange
-#        if np.min(photometry[i,good[0]]) < hrange[0]:
-#            bmin=hrange[0]
-#        else:
-#            bmin=np.min(photometry[i,good[0]])
-#        if np.max(photometry[i,good[0]]) > hrange[1]:
-#            bmax=hrange[1]
-#        else:
-#            bmax=np.max(photometry[i,good[0]])
         goodi=np.where((flags == 1.) & (photometry[i,:] > -1.*maxgood) & (photometry[i,:] < maxgood))
         rms=bmv(photometry[i,goodi[0]])
         (bmin,bmax)=(-1.*rfactor*rms,rfactor*rms)
-#        print bmin,bmax
         if ((save != '') & (i == 0)):
             f=open(save,'w')
             for j in photometry[i,goodi[0]]:
                 f.write(str(j)+'\n')
             f.close()
         res=getbinsize(bmin,bmax,spaces[i])
-#        dumb=open('dumb.txt','w')
-#        for j in range(len(flags)):
-#            dumb.write(str(photometry[i,j])+'\t'+str(flags[j])+'\n')
-#        dumb.close()
         binarr=np.linspace(np.floor(bmin),np.ceil(bmax),np.ceil(np.sqrt(len(photometry[i,good[0]]))))
-#        print np.ceil(np.sqrt(len(photometry[i,good[0]])))
         (n,bins,_)=plt.hist(photometry[i,good[0]],bins=binarr,
                             range=[bmin,bmax],histtype='step',color=colors[i])
         np.savetxt('photdata.dat', np.c_[photometry[i,good[0]]])
@@ -227,32 +206,8 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
         yarr=gauss3(xarr,gfit[0],gfit[1],gfit[2])
         plt.plot(xarr,yarr,'--',color=colors[i],label=r'$N = '+str(np.round(np.sqrt(np.pi*(radii[i]**2.0)),1))+'$, $\sigma = '+str(np.round(gfit[2],2))+'$')
 
-#        if radii[i] < 4.:
-#            gparguess=[np.max(narr),barr[np.where(narr == np.max(narr))[0][0]],np.std(barr),0.,0.,0.]
-#            (gfit,gcovariance)=optimize.curve_fit(gauss,barr,narr,p0=gparguess,maxfev=100000)
-#            xarr=np.round(np.linspace(bmin,bmax,20000),4)
-#            yarr=gauss(xarr,gfit[0],gfit[1],gfit[2],gfit[3],gfit[4],gfit[5])
-#            if gfit[2] < 0.:
-#                gfit[2]=np.abs(gfit[2])
-#            plt.plot(xarr,yarr,'--',color=colors[i],label=r'$N = '+str(np.round(radii[i],1))+'$, $\sigma = '+str(np.round(gfit[2],2))+'$')
-#        else:
-#            gparguess=[np.max(narr),barr[np.where(narr == np.max(narr))[0][0]],np.std(barr)]
-#            (gfit,gcovariance)=optimize.curve_fit(gauss3,barr,narr,p0=gparguess,maxfev=100000)
-#            if gfit[2] < 0.:
-#                gfit[2]=np.abs(gfit[2])
-#            xarr=np.round(np.linspace(bmin,bmax,20000),4)
-#            yarr=gauss3(xarr,gfit[0],gfit[1],gfit[2])
-#            plt.plot(xarr,yarr,'--',color=colors[i],label=r'$N = '+str(np.round(radii[i],1))+'$, $\sigma = '+str(np.round(gfit[2],2))+'$')
         widths.append(gfit[2])
 
-#    if bmin < -500.0:
-#        plmin=-500.0
-#    else:
-#        plmin=bmin
-#    if bmax > 500.0:
-#        plmax=500.0
-#    else:
-#        plmax=bmax
     (plmin,plmax)=(bmin,bmax)
     plt.axis([plmin,plmax,0,np.ceil(np.max(heights)/10.)*10.+10])
     if clname != '':
@@ -277,8 +232,6 @@ def main(image,segmap,niter=1200,pixscale=0.4,aprange=[0.5,3.0],level=5.0,
     plt.axis([0.,np.ceil(np.max(radn))+2,0.,np.ceil(np.max(widths))+1.0])
     eqnstring=r'$\sigma='+str(round(sfit[0],2)).strip()+r'N\times['+str(round(sfit[1],2)).strip()+r'+('+str(round(sfit[2],2)).strip()+\
                  r'N)]$'
-#    eqnstring += '\n'
-#    eqnstring += r'$\sigma(1) = '+str(round(sigfunc(1./0.4,sfit[0],sfit[1],sfit[2],sfit[3]),2)).strip()+r'$ counts / sec$^{-1}$'
     plt.annotate(eqnstring,xy=(1.0,np.max(widths)*0.75),xytext=(1.0,np.max(widths)*0.75),color='black',weight='heavy',fontsize=20)
     plt.xlabel('Linear Aperture Size N / pixels',weight='heavy')
     plt.ylabel(r'$\sigma$ / counts sec$^{-1}$',weight='heavy')
