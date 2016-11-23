@@ -14,7 +14,7 @@ from astropysics import obstools as obs
 import matplotlib.pyplot as plt
 import pyfits as pf
 from astropy.stats.funcs import biweight_location as bl
-
+from scipy.optimize import curve_fit
 
 #plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 #plt.rc('ps',usedistiller='xpdf')
@@ -33,21 +33,105 @@ from astropy.stats.funcs import biweight_location as bl
 
 #Constants
 vega2AB={'bctio':-0.09949,'bkpno':-0.10712,'v':0.01850,'r':0.19895,'i':0.42143,'k':1.84244}
+medCterms={'VRv':-0.151,'VRr':0.0245,'VIv':-0.0725,'VIi':0.1465,'RIr':0.015,'RIi':0.238}
 
 #-----------------------------------
-def matchxy(x1,y1,x2,y2,tol=0.0):
+def fixedVRv(x,zp):
+    return (medCterms['VRv']*x)+zp
+
+def fixedVRr(x,zp):
+    return (medCterms['VRr']*x)+zp
+
+def fixedVIv(x,zp):
+    return (medCterms['VIv']*x)+zp
+
+def fixedVIi(x,zp):
+    return (medCterms['VIi']*x)+zp
+
+def fixedRIr(x,zp):
+    return (medCterms['RIr']*x)+zp
+
+def fixedRIi(x,zp):
+    return (medCterms['RIi']*x)+zp
+
+#-----------------------------------
+def updatecat(catalog,fieldName,outname,megacat='/Volumes/BAHAMUT/megacat.v5.7.fits'):
+
+    hdu = pf.open(catalog)
+    oldData = hdu[1].data
+    field=[fieldName for x in range(len(oldData))]
+
+    (filters, apertures) = (['B','V','R','I','z','K'], ['1','2','3','iso','auto'])
+    for filt in filters:
+        for ap in apertures:
+            fluxes = 'f'+filt+ap
+            bad = np.where(np.log10(np.abs(oldData[fluxes])) < -6.)
+            oldData[fluxes][bad] = -77
+
+    (zLDP,Q)=(np.zeros(len(oldData))-99,np.zeros(len(oldData))-99)
+    
+    megatab=pf.open('/Users/tyler/megacat.v5.7.fits')
+    megadat=megatab[1].data
+    (mzldp,mq,megaRA,megaDec)=(megadat['zldp'],megadat['q'],megadat['RA'],megadat['DEC'])
+        
+    wfiSky=coordinates.SkyCoord(ra=oldData['ra']*u.degree, dec=oldData['dec']*u.degree)
+    megaSky=coordinates.SkyCoord(ra=megaRA*u.degree, dec=megaDec*u.degree)
+    (idx,d2d,_)=wfiSky.match_to_catalog_sky(megaSky)
+    match=np.where(d2d.arcsec < 0.5)
+    zLDP[match]=mzldp[idx][match]
+    Q[match]=mq[idx][match]
+    
+    final={'field':field,'ids':oldData['ids'],'ra':oldData['ra'],'dec':oldData['dec'],'x':oldData['x'],'y':oldData['y'],'ebv':oldData['ebv'],
+           'fwhmR':oldData['fwhmR'],
+           'fB1':oldData['fB1'],'fB1err':oldData['fB1err'],'fB2':oldData['fB2'],'fB2err':oldData['fB2err'],'fB3':oldData['fB3'],'fB3err':oldData['fB3err'],
+           'fBiso':oldData['fBiso'],'fBisoerr':oldData['fBisoerr'],'fBauto':oldData['fBauto'],'fBautoerr':oldData['fBautoerr'],'fV1':oldData['fV1'],
+           'fV1err':oldData['fV1err'],'fV2':oldData['fV2'],'fV2err':oldData['fV2err'],'fV3':oldData['fV3'],'fV3err':oldData['fV3err'],'fViso':oldData['fViso'],
+           'fVisoerr':oldData['fVisoerr'],'fVauto':oldData['fVauto'],'fVautoerr':oldData['fVautoerr'],'fR1':oldData['fR1'],'fR1err':oldData['fR1err'],
+           'fR2':oldData['fR2'],'fR2err':oldData['fR2err'],'fR3':oldData['fR3'],'fR3err':oldData['fR3err'],'fRiso':oldData['fRiso'],'fRisoerr':oldData['fRisoerr']
+           ,'fRauto':oldData['fRauto'],'fRautoerr':oldData['fRautoerr'],'fI1':oldData['fI1'],'fI1err':oldData['fI1err'],'fI2':oldData['fI2'],
+           'fI2err':oldData['fI2err'],'fI3':oldData['fI3'],'fI3err':oldData['fI3err'],'fIiso':oldData['fIiso'],'fIisoerr':oldData['fIisoerr'],
+           'fIauto':oldData['fIauto'],'fIautoerr':oldData['fIautoerr'],'fz1':oldData['fz1'],'fz1err':oldData['fz1err'],'fz2':oldData['fz2'],
+           'fz2err':oldData['fz2err'],'fz3':oldData['fz3'],'fz3err':oldData['fz3err'],'fziso':oldData['fziso'],'fzisoerr':oldData['fzisoerr'],
+           'fzauto':oldData['fzauto'],'fzautoerr':oldData['fzautoerr'],'fK1':oldData['fK1'],'fK1err':oldData['fK1err'],'fK2':oldData['fK2'],
+           'fK2err':oldData['fK2err'],'fK3':oldData['fK3'],'fK3err':oldData['fK3err'],'fKiso':oldData['fKiso'],'fKisoerr':oldData['fKisoerr'],
+           'fKauto':oldData['fKauto'],'fKautoerr':oldData['fKautoerr'],'zLDP':zLDP,'Q':Q,'starB':oldData['starB'],'starV':oldData['starV'],
+           'starR':oldData['starR'],
+           'starI':oldData['starI'],'starz':oldData['starz'],'starK':oldData['starK'],'sexflagB':oldData['sexflagB'],'sexflagV':oldData['sexflagV'],
+           'sexflagR':oldData['sexflagR'],'sexflagI':oldData['sexflagI'],'sexflagz':oldData['sexflagz'],'sexflagK':oldData['sexflagK']}
+
+    tab = Table(final, names=('field','ids','ra','dec','x','y','ebv','fwhmR','fB1','fB1err','fB2',
+                              'fB2err','fB3','fB3err','fBiso','fBisoerr',
+                             'fBauto','fBautoerr','fV1','fV1err','fV2','fV2err','fV3','fV3err','fViso','fVisoerr','fVauto',
+                             'fVautoerr','fR1','fR1err','fR2','fR2err','fR3','fR3err','fRiso','fRisoerr','fRauto',
+                             'fRautoerr','fI1','fI1err','fI2','fI2err','fI3','fI3err','fIiso','fIisoerr','fIauto',
+                             'fIautoerr','fz1','fz1err','fz2','fz2err','fz3','fz3err','fziso','fzisoerr','fzauto',
+                             'fzautoerr','fK1','fK1err','fK2','fK2err','fK3','fK3err','fKiso','fKisoerr','fKauto',
+                             'fKautoerr','zLDP','Q','starB','starV','starR','starI','starz','starK','sexflagB','sexflagV','sexflagR','sexflagI',
+                             'sexflagz','sexflagK'))
+    tab.write(outname, format='fits', overwrite=True)
+
+#-----------------------------------
+def matchxy(x1,y1,x2,y2,tol=0.1):
 
     match=[]
     for i in range(len(x1)):
         cdt=(x1[i],y1[i])
         dist=np.sqrt((cdt[0]-x2)**2.+(cdt[1]-y2)**2.)
-        if np.min(dist) == 0.0:
-            match.append(i)
+        if np.min(dist) <= tol:
+            match.append(np.where(dist == np.min(dist))[0][0])
 
     return np.array(match)
 
 #-----------------------------------
 def backZP(flux,mag):
+    """PURPOSE: Backout the zeropoint for a source knowing its flux in detector units and its physical magnitude
+
+    INPUTS:
+    \tflux - flux in detector units (counts or counts/second)
+    \tmag  - magnitude in physical units (note that if this is in AB mag, the result includes the AB conversion factor)
+    
+    RETURNS: The zeropoint to convert between detector flux and physical magnitude
+    """
 
     return 2.5*np.log10(flux)+mag
 
@@ -55,7 +139,7 @@ def backZP(flux,mag):
 def getSmoothFactor(rcat,xcat,class_star=0.0,border=1500.,pixscale=0.238,save=False):
 
     rangeMagR=[-15.,-12.]
-    rangeMagX=[-8.,-4.]
+    rangeMagX=[-10.,-5.]
 
     (rflux,rfwhm,starR)=np.loadtxt(rcat,usecols=(6,9,14),unpack=True,comments='#')
     (xcdt,ycdt,xflux,xfwhm,starX)=np.loadtxt(xcat,usecols=(2,3,6,9,14),unpack=True,comments='#')
@@ -96,7 +180,6 @@ def getSmoothFactor(rcat,xcat,class_star=0.0,border=1500.,pixscale=0.238,save=Fa
 #-----------------------------------
 def addquad(xerr,orerr,nrerr,xflux,orflux,nrflux):
 
-    #(mm/mr)*rr
     value=(xflux/nrflux)*orflux
 
     return value*np.sqrt((xerr/xflux)**2. + (nrerr/nrflux)**2. + (orerr/orflux)**2.)
@@ -104,6 +187,14 @@ def addquad(xerr,orerr,nrerr,xflux,orflux,nrflux):
     
 #-----------------------------------
 def photscript(listfile,clname,photfile='photscript'):
+    """
+    PURPOSE: Generate a script (to be called on with source from the command line) that will run SExtractor on
+    \tall input images in dual-image mode (using the R-band for detection) for a cluster.
+
+    INPUTS:
+    \tlistfile -
+
+    """
 
     (keys,files)=np.loadtxt(listfile,usecols=(0,1),unpack=True,dtype={'names':('keys','files'), 'formats':('S4','S30')})
     imgs={}
@@ -177,7 +268,7 @@ def fixData(data,flag=-88.0):
 #-----------------------------------
 def sigfunc(N,s,a,b):
     """
-    Equation 3 from Labbe et al. (2003), ApJ, 125, 1107
+    PURPOSE: Function from qquation 3 from Labbe et al. (2003), ApJ, 125, 1107. 
     """
     
     return (N*s*(a+(b*N)))
@@ -220,6 +311,15 @@ def binAvgDataFixed(x, y, width, minimum = -999999.0, maximum = 9999999.0):
 
 #-----------------------------------
 def getEBV(ra,dec):
+    """
+    PURPOSE: For a given RA and Dec, lookup the E(B-V) value from the Schlegel dust maps.
+
+    INPUTS:
+    \tra  - Right ascension (deg; J2000)
+    \tdec - Declination (deg; J2000)
+
+    RETURNS: E(B-V)
+    """
 
     if os.path.exists('SFD_dust_4096_ngp.fits') == False:
         shutil.copy('/Users/tyler/Downloads/SFD_dust_4096_ngp.fits','.')
@@ -234,6 +334,16 @@ def getEBV(ra,dec):
 
 #-----------------------------------
 def calflux(flux, zp, abconv = 0.0):
+    """
+    PURPOSE: Converts an instrumental flux into a physical one in flux space to preserve negative values.
+
+    INPUTS:
+    \tflux   - instrumental flux
+    \tzp     - zeropoint to convert instrumental to calibrated flux
+    \tabconv - conversion factor from Vega to AB magnitudes (optional)
+
+    RETURNS: Flux in uJy
+    """
 
     return ((flux)/(10.0**(0.4*(zp + abconv)))) * 3631.0 * 1e6
         
@@ -327,25 +437,46 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
     (vrrange,virange,rirange)=(np.where((vrcolor > 0.) & (vrcolor < 2.5) & (zpV > 22.5) & (zpR > 22.5) & (zpI > 22.5)),
                                np.where((vicolor > 0.) & (vicolor < 2.5) & (zpV > 22.5) & (zpR > 22.5) & (zpI > 22.5)),
                                np.where((ricolor > 0.) & (ricolor < 2.5) & (zpV > 22.5) & (zpR > 22.5) & (zpI > 22.5)))
+    
     if synth == True:
         goodvr = np.where((vrcolor > 0.0) & (vrcolor < 2.5))
         (zpVvr, zpRvr, vr) = (zpV[goodvr], zpR[goodvr], vrcolor[goodvr])
-        (vfit0,vfit1)=rlm('zpVvr~vr',data=dict(y=zpVvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
-        (rfit0,rfit1)=rlm('zpRvr~vr',data=dict(y=zpRvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
+        vfit0=curve_fit(fixedVRv,vr,zpVvr)[0][0]
+        rfit0=curve_fit(fixedVRr,vr,zpRvr)[0][0]
+#        (vfit0,vfit1)=rlm('zpVvr~vr',data=dict(y=zpVvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
+#        (rfit0,rfit1)=rlm('zpRvr~vr',data=dict(y=zpRvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
     else:
         goodvr = np.where((vrcolor > 0.) & (vrcolor < 2.5))
         (zpVvr, zpRvr, vr) = (zpV[goodvr], zpR[goodvr], vrcolor[goodvr])
-        (vfit0,vfit1)=rlm('zpVvr~vr',data=dict(y=zpVvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
-        (rfit0,rfit1)=rlm('zpRvr~vr',data=dict(y=zpRvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
+        vfit0=curve_fit(fixedVRv,vr,zpVvr)[0][0]
+        rfit0=curve_fit(fixedVRr,vr,zpRvr)[0][0]
+#        (vfit0,vfit1)=rlm('zpVvr~vr',data=dict(y=zpVvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
+#        (rfit0,rfit1)=rlm('zpRvr~vr',data=dict(y=zpRvr,x=vr),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000,tol=1e-10).params
          
     (zpVvi, zpVvr, zpRri, zpRvr, zpIri, zpIvi) = (zpV[virange], zpV[vrrange], zpR[rirange], zpR[vrrange], zpI[rirange], zpI[virange])
     (vr,ri,vi) = (vrcolor[vrrange],ricolor[rirange],vicolor[virange])
      
-    (vfit20,vfit21)=rlm('zpVvi~vi',data=dict(y=zpVvi,x=vi),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
-    (rfit20,rfit21)=rlm('zpRri~ri',data=dict(y=zpRri,x=ri),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
-    (ifit0,ifit1)=rlm('zpIvi~vi',data=dict(y=zpIvi,x=vi),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
-    (ifit20,ifit21)=rlm('zpIri~ri',data=dict(y=zpIri,x=ri),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
+#    (vfit20,vfit21)=rlm('zpVvi~vi',data=dict(y=zpVvi,x=vi),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
+#    (rfit20,rfit21)=rlm('zpRri~ri',data=dict(y=zpRri,x=ri),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
+#    (ifit0,ifit1)=rlm('zpIvi~vi',data=dict(y=zpIvi,x=vi),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
+#    (ifit20,ifit21)=rlm('zpIri~ri',data=dict(y=zpIri,x=ri),M=sm.robust.norms.TukeyBiweight()).fit(conv='sresid',maxiter=1000).params
+    vfit20=curve_fit(fixedVIv,vi,zpVvi)[0][0]
+    rfit20=curve_fit(fixedRIr,ri,zpRri)[0][0]
+    ifit0=curve_fit(fixedVIi,vi,zpIvi)[0][0]
+    ifit20=curve_fit(fixedRIi,ri,zpIri)[0][0]
 
+    #Save color terms and zeropoints to output file
+#    zpfile=open('wfi_zeropoints.dat','w')
+#    cnames=['VR(V)','VR(R)','VI(V)','VI(I)','RI(R)','RI(I)']
+#    cterms=[str(np.around(vfit1,3)),str(np.around(rfit1,3)),str(np.around(vfit21,3)),str(np.around(ifit1,3)),
+#            str(np.around(rfit21,3)),str(np.around(ifit21,3))]
+#    czeros=[str(np.around(vfit0,3)),str(np.around(rfit0,3)),str(np.around(vfit20,3)),str(np.around(ifit0,3)),
+#            str(np.around(rfit20,3)),str(np.around(ifit20,3))]
+#    zpfile.write('#COLOR\tSLOPE\tZEROPOINT\n')
+#    for kk in range(len(cnames)):
+#        zpfile.write(cnames[kk]+'\t'+cterms[kk]+'\t'+czeros[kk]+'\n')
+#    zpfile.close()
+     
 #    print sforsRAh[idx][match][np.where(zpR - (rfit0 + (rfit1 * vrcolor)) > 0.1)]
 #    print sforsDec[idx][match][np.where(zpR - (rfit0 + (rfit1 * vrcolor)) > 0.1)]
 
@@ -354,13 +485,13 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
     plt.plot(vicolor,zpV,'bo')
     plt.plot(vrcolor,zpR,'ko')
     xx=np.array([-100.0,100.0])
-    yy=ifit0+(xx*ifit1)
-    yy2=vfit20+(xx*vfit21)
-    yy3=rfit0+(xx*rfit1)
+    yy=ifit0+(xx*medCterms['VIi'])
+    yy2=vfit20+(xx*medCterms['VIv'])
+    yy3=rfit0+(xx*medCterms['VRr'])
     plt.plot(xx,yy,'r--')
     plt.plot(xx,yy2,'b--')
     plt.plot(xx,yy3,'k--')
-    plt.axis([0,2.5,29.5,32])
+    plt.axis([0,2.5,np.min([ifit0,vfit20,rfit0])-0.5,np.max([ifit0,vfit20,rfit0])+1.])
     plt.xlabel('(V-I)')
     plt.ylabel('ZP')
     plt.savefig('slopecheck.pdf', format='pdf', dpi=6000)
@@ -377,7 +508,7 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
     #the (R-I) color (and the assosciated fit), otherwise use the (V-R) and (V-I)
     #colors.
     (nv,nr,ni)=(0,0,0)
-    (zpV0,zpR0,zpI0)=(vfit0+(0.5*vfit1), rfit0+(0.5*rfit1), ifit0+(0.5*ifit1))
+    (zpV0,zpR0,zpI0)=(vfit0+(0.5*medCterms['VRv']), rfit0+(0.5*medCterms['VRr']), ifit0+(0.5*medCterms['VIi']))
     (vmag,rmag,imag)=(np.empty(len(starR)),np.empty(len(starR)),np.empty(len(starR)))
     (zpv,zpr,zpi)=(np.empty(len(starR)),np.empty(len(starR)),np.empty(len(starR)))
     rpflag=np.empty(len(starR))
@@ -394,14 +525,14 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
         while (ii <= 20) and (np.abs(rdiff) > tol):
             if v[j] > 0:
                 rpflag[j]=ii
-                zpr[j]=rfit1*(compmag-rmag[j])+rfit0
-                zpcomp=vfit1*(compmag-rmag[j])+vfit0
+                zpr[j]=medCterms['VRr']*(compmag-rmag[j])+rfit0
+                zpcomp=medCterms['VRv']*(compmag-rmag[j])+vfit0
                 rmag[j]=flux2mag(r[j],zpr[j])
                 compmag=flux2mag(v[j],zpcomp)
             elif ((v[j] <= 0) & (i[j] > 0)):
                 rpflag[j]=-1
-                zpr[j]=rfit21*(rmag[j]-compmag)+rfit20
-                zpcomp=ifit21*(rmag[j]-compmag)+ifit20
+                zpr[j]=medCterms['RIr']*(rmag[j]-compmag)+rfit20
+                zpcomp=medCterms['RIi']*(rmag[j]-compmag)+ifit20
                 rmag[j]=flux2mag(r[j],zpr[j])
                 compmag=flux2mag(i[j],zpcomp)
             else:
@@ -420,7 +551,7 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
             vmag[j]=oldv
             compmag=rmag[j]
             while (ii <= 20) and (np.abs(vdiff) > tol):
-                zpv[j]=vfit1*(vmag[j]-compmag)+vfit0
+                zpv[j]=medCterms['VRv']*(vmag[j]-compmag)+vfit0
                 vmag[j]=flux2mag(v[j],zpv[j])
                 vdiff=oldv-vmag[j]
                 oldv=vmag[j]
@@ -433,9 +564,9 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', starref = '
             oldi=flux2mag(i[j],zpi[j])
             imag[j]=oldi
             if v[j] > 0:
-                (fit0, fit1, compmag, cfit0, cfit1) = (ifit0, ifit1, vmag[j], vfit20, vfit21)
+                (fit0, fit1, compmag, cfit0, cfit1) = (ifit0, medCterms['VIi'], vmag[j], vfit20, medCterms['VIv'])
             else:
-                (fit0, fit1, compmag, cfit0, cfit1) = (ifit20, ifit21, rmag[j], rfit20, rfit21)
+                (fit0, fit1, compmag, cfit0, cfit1) = (ifit20, medCterms['RIi'], rmag[j], rfit20, medCterms['RIr'])
             while (ii <= 20) and (np.abs(idiff) > tol):
                 zpi[j]=fit1*(compmag-imag[j])+fit0
                 imag[j]=flux2mag(i[j],zpi[j])
@@ -730,7 +861,7 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
 
     tmpData = mergeLists(k=k,r=r,zpk=zpk,null=null,rimg=imgs['rimg'])
 
-    res=matchxy(tmpData['x'],tmpData['y'],oldRx,oldRy)
+    res=matchxy(oldRx,oldRy,tmpData['x'],tmpData['y'])
 
     newData = {'k1':tmpData['k1'][res], 'k2':tmpData['k2'][res], 'k3':tmpData['k3'][res],
                'kiso':tmpData['kiso'][res], 'kauto':tmpData['kauto'][res],
@@ -812,9 +943,9 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
 
     else:
         (newData['k1e'], newData['k2e'], newData['k3e'],
-         newData['kisoe'], newData['kautoe']) = (b1err*newData['k1'], b2err*newData['k2'],
-                                                 b3err*newData['k3'], bisoerr*newData['kiso'],
-                                                 bautoerr*newData['kauto'])
+         newData['kisoe'], newData['kautoe']) = (k1err*newData['k1'], k2err*newData['k2'],
+                                                 k3err*newData['k3'], kisoerr*newData['kiso'],
+                                                 kautoerr*newData['kauto'])
                                                  
         (k1mc, k2mc, k3mc, kisomc, kautomc) = (k1m, k2m, k3m, kisom, kautom)
         
@@ -824,8 +955,9 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
     #Scale uncertainties by the exposure map
     expdata=pf.open(expmap)[0].data
     expmax=np.max(expdata)
-    expvalues=expdata[oldData['y'].astype(int),oldData['x'].astype(int)]
+    expvalues=expdata[tmpData['y'][res].astype(int),tmpData['x'][res].astype(int)]
     scales=1./np.sqrt(expvalues/expmax)
+
     (newData['k1e'],newData['k2e'],newData['k3e'],
      newData['kisoe'],newData['kautoe']) = (newData['k1e']*scales, newData['k2e']*scales, newData['k3e']*scales,
                                             newData['kisoe']*scales, newData['kautoe']*scales)
@@ -833,23 +965,29 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
 
     outname=clname+'_catalogK_v7.0.fits'
 
-    final={'ids':oldData['ids'],'ra':oldData['ra'],'dec':oldData['dec'],'x':oldData['x'],'y':oldData['y'],'ebv':oldData['ebv'],'fwhmB':oldData['fwhmB'],
-           'fwhmV':oldData['fwhmV'],'fwhmR':oldData['fwhmR'],'fwhmI':oldData['fwhmI'],'fwhmz':oldData['fwhmz'],'fwhmK':newData['fwhmK'],
-           'fB1':oldData['fB1'],'fB1err':oldData['fB1err'],'fB2':oldData['fB2'],'fB2err':oldData['fB2err'],'fB3':oldData['fB3'],'fB3err':oldData['fB3err'],
-           'fBiso':oldData['fBiso'],'fBisoerr':oldData['fBisoerr'],'fBauto':oldData['fBauto'],'fBautoerr':oldData['fBautoerr'],'fV1':oldData['fV1'],
-           'fV1err':oldData['fV1err'],'fV2':oldData['fV2'],'fV2err':oldData['fV2err'],'fV3':oldData['fV3'],'fV3err':oldData['fV3err'],'fViso':oldData['fViso'],
-           'fVisoerr':oldData['fVisoerr'],'fVauto':oldData['fVauto'],'fVautoerr':oldData['fVautoerr'],'fR1':oldData['fR1'],'fR1err':oldData['fR1err'],
-           'fR2':oldData['fR2'],'fR2err':oldData['fR2err'],'fR3':oldData['fR3'],'fR3err':oldData['fR3err'],'fRiso':oldData['fRiso'],'fRisoerr':oldData['fRisoerr']
-           ,'fRauto':oldData['fRauto'],'fRautoerr':oldData['fRautoerr'],'fI1':oldData['fI1'],'fI1err':oldData['fI1err'],'fI2':oldData['fI2'],
-           'fI2err':oldData['fI2err'],'fI3':oldData['fI3'],'fI3err':oldData['fI3err'],'fIiso':oldData['fIiso'],'fIisoerr':oldData['fIisoerr'],
-           'fIauto':oldData['fIauto'],'fIautoerr':oldData['fIautoerr'],'fz1':oldData['fz1'],'fz1err':oldData['fz1err'],'fz2':oldData['fz2'],
-           'fz2err':oldData['fz2err'],'fz3':oldData['fz3'],'fz3err':oldData['fz3err'],'fziso':oldData['fziso'],'fzisoerr':oldData['fzisoerr'],
-           'fzauto':oldData['fzauto'],'fzautoerr':oldData['fzautoerr'],'fK1':newData['k1'],'fK1err':newData['k1e'],'fK2':newData['k2'],
+    #Check if old catalog has more sources than K-band (weird problem, but crept up) and remove spurious sources (should only be 1 or 2 max)
+    if len(oldData['x']) > len(res):
+        use=matchxy(tmpData['x'],tmpData['y'],oldData['x'],oldData['y'])
+    else:
+        use=np.arange(len(oldData['x']))
+
+    final={'ids':oldData['ids'][use],'ra':oldData['ra'][use],'dec':oldData['dec'][use],'x':oldData['x'][use],'y':oldData['y'][use],'ebv':oldData['ebv'][use],'fwhmB':oldData['fwhmB'][use],
+           'fwhmV':oldData['fwhmV'][use],'fwhmR':oldData['fwhmR'][use],'fwhmI':oldData['fwhmI'][use],'fwhmz':oldData['fwhmz'][use],'fwhmK':newData['fwhmK'],
+           'fB1':oldData['fB1'][use],'fB1err':oldData['fB1err'][use],'fB2':oldData['fB2'][use],'fB2err':oldData['fB2err'][use],'fB3':oldData['fB3'][use],'fB3err':oldData['fB3err'][use],
+           'fBiso':oldData['fBiso'][use],'fBisoerr':oldData['fBisoerr'][use],'fBauto':oldData['fBauto'][use],'fBautoerr':oldData['fBautoerr'][use],'fV1':oldData['fV1'][use],
+           'fV1err':oldData['fV1err'][use],'fV2':oldData['fV2'][use],'fV2err':oldData['fV2err'][use],'fV3':oldData['fV3'][use],'fV3err':oldData['fV3err'][use],'fViso':oldData['fViso'][use],
+           'fVisoerr':oldData['fVisoerr'][use],'fVauto':oldData['fVauto'][use],'fVautoerr':oldData['fVautoerr'][use],'fR1':oldData['fR1'][use],'fR1err':oldData['fR1err'][use],
+           'fR2':oldData['fR2'][use],'fR2err':oldData['fR2err'][use],'fR3':oldData['fR3'][use],'fR3err':oldData['fR3err'][use],'fRiso':oldData['fRiso'][use],'fRisoerr':oldData['fRisoerr'][use]
+           ,'fRauto':oldData['fRauto'][use],'fRautoerr':oldData['fRautoerr'][use],'fI1':oldData['fI1'][use],'fI1err':oldData['fI1err'][use],'fI2':oldData['fI2'][use],
+           'fI2err':oldData['fI2err'][use],'fI3':oldData['fI3'][use],'fI3err':oldData['fI3err'][use],'fIiso':oldData['fIiso'][use],'fIisoerr':oldData['fIisoerr'][use],
+           'fIauto':oldData['fIauto'][use],'fIautoerr':oldData['fIautoerr'][use],'fz1':oldData['fz1'][use],'fz1err':oldData['fz1err'][use],'fz2':oldData['fz2'][use],
+           'fz2err':oldData['fz2err'][use],'fz3':oldData['fz3'][use],'fz3err':oldData['fz3err'][use],'fziso':oldData['fziso'][use],'fzisoerr':oldData['fzisoerr'][use],
+           'fzauto':oldData['fzauto'][use],'fzautoerr':oldData['fzautoerr'][use],'fK1':newData['k1'],'fK1err':newData['k1e'],'fK2':newData['k2'],
            'fK2err':newData['k2e'],'fK3':newData['k3'],'fK3err':newData['k3e'],'fKiso':newData['kiso'],'fKisoerr':newData['kisoe'],
-           'fKauto':newData['kauto'],'fKautoerr':newData['kautoe'],'zLDP':oldData['zLDP'],'Q':oldData['Q'],'starB':oldData['starB'],'starV':oldData['starV'],
-           'starR':oldData['starR'],
-           'starI':oldData['starI'],'starz':oldData['starz'],'starK':newData['starK'],'sexflagB':oldData['sexflagB'],'sexflagV':oldData['sexflagV'],
-           'sexflagR':oldData['sexflagR'],'sexflagI':oldData['sexflagI'],'sexflagz':oldData['sexflagz'],'sexflagK':newData['sexflagK']}
+           'fKauto':newData['kauto'],'fKautoerr':newData['kautoe'],'zLDP':oldData['zLDP'][use],'Q':oldData['Q'][use],'starB':oldData['starB'][use],'starV':oldData['starV'][use],
+           'starR':oldData['starR'][use],
+           'starI':oldData['starI'][use],'starz':oldData['starz'][use],'starK':newData['starK'],'sexflagB':oldData['sexflagB'][use],'sexflagV':oldData['sexflagV'][use],
+           'sexflagR':oldData['sexflagR'][use],'sexflagI':oldData['sexflagI'][use],'sexflagz':oldData['sexflagz'][use],'sexflagK':newData['sexflagK']}
 
     tab = Table(final, names=('ids','ra','dec','x','y','ebv','fwhmB','fwhmV','fwhmR','fwhmI','fwhmz','fwhmK','fB1','fB1err','fB2',
                               'fB2err','fB3','fB3err','fBiso','fBisoerr',
@@ -864,7 +1002,7 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
 
 #-----------------------------------
 def main(b="", v="", r="", i="", z="", k="", rb="", rk="", imglist='', rsegmap="",
-         zpb=0.0, zpk=0.0, zpz=0.0, null=-99, kpno = True, clname="",pixscale=0.238,
+         zpb=0.0, zpk=0.0, zpz=0.0, null=-99, kpno = False, clname="",pixscale=0.238,
          outprefix='',idname='',synth=False, megacat='/Volumes/BAHAMUT/megacat.v5.7.fits',maxz=100.,
          xmin=-99,xmax=-99,ymin=-99,ymax=-99,errborder=50.0):
     """
@@ -1035,6 +1173,10 @@ def main(b="", v="", r="", i="", z="", k="", rb="", rk="", imglist='', rsegmap="
          data['ziso'], data['zauto']) = (calflux(data['z1'], zpz, abconv = 0.0), calflux(data['z2'], zpz, abconv = 0.0),
                                           calflux(data['z3'], zpz, abconv = 0.0), calflux(data['ziso'], zpz, abconv = 0.0),
                                           calflux(data['zauto'], zpz, abconv = 0.0))
+
+#        find=np.where(data['x'] == 8415.469)
+#        print data['z1'][find], z1c[find]
+#        pdb.set_trace()
         
          
     #Compute errors
