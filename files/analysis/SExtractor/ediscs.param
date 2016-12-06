@@ -1,0 +1,26 @@
+ALPHA_J2000
+DELTA_J2000
+X_IMAGE
+Y_IMAGE
+
+FLUX_APER(3)
+FLUX_ISO
+FLUX_AUTO
+
+FWHM_WORLD
+
+#For AUTO aperture areas.
+#Semi-major axis (a): KRON_RADIUS x A_IMAGE
+#Semi-minor axis (b): KRON_RADIUS x B_IMAGE
+#Elliptical area (A): pi * a * b
+#Circularized radius: sqrt(A / pi)
+KRON_RADIUS
+A_IMAGE
+B_IMAGE
+THETA_IMAGE
+
+#ISO Area is already calculated in square pixels
+ISOAREAF_IMAGE
+
+CLASS_STAR
+FLAGS

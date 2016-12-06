@@ -1,0 +1,48 @@
+The file zphot.param is an example of the inputs to EAZY. This file
+will need to be tweaked for each cluster so that the correct number of
+filters it used (e.g., for CL1354, N_MIN_COLORS should be set to 6 for
+the BVRIzK filters that cluster has).
+
+
+The file filters.dat is a list of the filter transmission for each of
+the filters used in the EDisCS optical/near-IR photometry. This file
+is for use in EAZY and will need to be in (or linked to) each
+directory that EAZY is run. Each filter is given a number, and the
+numbers correspond to the following:
+
+	1 - CTIO B
+	2 - KPNO B
+	3 - FORS V
+	4 - FORS R
+	5 - FORS I
+	6 - z-band
+	7 - 2MASS Ks
+
+---
+SETTING UP FOR EAZY
+
+The code eazy.py in the ediscs github module has a subroutine that
+will create an ASCII catalog for ingestion into EAZY. However, there
+are some additional steps required to prepare to run EAZY. The bash
+script eazysetup will copy files and make directories as required. It
+will look for the environment variables $EDISCS and $EAZYINSTALL to
+locate appropriate files (filters.dat and zphot.param) and the EAZY
+spectroscopic templates.
+
+The eazy.py code will set up the remaining files (such as the
+definitions file for the columns in the input ASCII catalog). If
+zeropoint offsets are required, see the EAZY manual for information on
+how to do this. Basically, you can supply magnitude or flux offsets,
+but flux offsets are preferred as they will preserve the
+signal-to-noise ratio of the photometry. In this case, the file
+zphot.zeropoint will contain two columns as so:
+
+		F1   	     1.0
+		F3	     1.03
+
+where the first column is the flux column from the definitions
+file (see above). For EDisCS, F1 is the CTIO B-band, F3 is the FORS
+V-band, etc. In this example, we have applied no flux multiplier to
+the B-band, but we've brightened the V-band by 3%. Be sure to change
+the zphot.param file if necessary to use these offsets if desired (set
+GET_ZP_OFFSETS to y).
