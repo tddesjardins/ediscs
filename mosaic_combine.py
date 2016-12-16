@@ -37,7 +37,7 @@ def applywcs(input,cat='ub1',logfile='mosaic_log'):
     output=input[:-5]+'_wcs.fits'
     file_check(output,delete=True)
 
-    cmd=shlex.split('/usr/bin/wcstools-3.8.6/bin//imwcs -c '+cat+' -q irs -h 100000 -m 16 24 '+\
+    cmd=shlex.split('/usr/bin/wcstools-3.9.0/bin//imwcs -c '+cat+' -q irs -h 100000 -m 17 23 '+\
             '-i -3 -o '+output+' -wv '+input)
     subprocess.Popen(cmd).wait()
 
@@ -65,9 +65,14 @@ def calczp(airmass):#,zpfile='/Users/tyler/research/cluster_photoz/mosaic/zeropo
     return zp0+(aircorr*airmass)
 
 #--------------------------------------------------------------------------------------------------------
-def scaleAndCombineMEF(input,mask):
+def scaleAndCombineMEF(input,mask):#,scalefile='/Users/tyler/research/cluster_photoz/mosaic/'+\
+#                       'ccd_test_scaling.dat',logfile='mosaic_log',subBKG=False):
 
-    print input
+#    (ccdid,scaleFactor)=np.loadtxt(scalefile,usecols=(0,1),unpack=True,
+#                                   dtype=np.dtype([('ccdid','<i1'),('scaleFactor','<f14')]))
+
+#    print '\n\tPreparing to scale CCDs to common flux system and \n'\
+#      '\tcombine MEF file into single image...'
 
     hdu=pf.open(input)
     hdr=hdu[0].header
@@ -78,6 +83,19 @@ def scaleAndCombineMEF(input,mask):
 
     copy=input[:-5]+'_copy.fits'
     shutil.copyfile(input,copy)
+#    iraf.unlearn('imcopy')
+#    iraf.imcopy(input+'[0]',copy,verbose='no')
+    
+#    iraf.unlearn('imcalc')
+#    for x in range(len(ccdid)):
+#        if subBKG == False:
+#            cmd=(input+'['+str(ccdid[x])+']',copy+'['+str(ccdid[x])+']','im1*'+str(scaleFactor[x]))
+#        else:
+#            data=pf.open(input)[ccdid[x]].data
+#            bkg=mode(data,axis=None)
+#            cmd=(input+'['+str(ccdid[x])+']',copy+'['+str(ccdid[x])+']','(im1*'+\
+#                 str(scaleFactor[x])+')-'+str(bkg[0][0]))
+#        iraf.imcalc(cmd[0],cmd[1],cmd[2],verbose='no')
 
     hdu=pf.open(copy,mode='update')
     (hdu[0].header['ZEROPT'],hdu[0].header['BPM'])=(zp,mask)
@@ -100,31 +118,27 @@ def scaleAndCombineMEF(input,mask):
 def scaleZP(inputList,reference,logfile='mosaic_log'):
 
     refZP=pf.open(reference)[0].header['ZEROPT']
+    refZPerr=pf.open(reference)[0].header['ZEROERR']
 
     print '\nNormalizing all images in stack to common zeropoint...'
 
     newStack=[]
     for x in inputList:
-        print '\n\tWorking on image '+x+'\n'
         copy=x[:-5]+'_tmp.fits'
         hdu=pf.open(x,mode='update')
         imgZP=hdu[0].header['ZEROPT']
         hdu[0].header['ZEROPT']=refZP
+        hdu[0].header['ZEROERR']=refZPerr
         hdu.flush()
         hdu.close()
-
-        if 'n1' in x:
-            print '\n\tImage is from night 1, scaling zeropoint to match reference image...\n'        
-            scaleFactor=10.0**(-0.4*(imgZP-refZP))
-        else:
-            print '\n\tImage is from night 2, no zeropoint scaling will be applied...\n'
-            scaleFactor=1
+        
+        scaleFactor=10.0**(-0.4*(refZP-imgZP))
         iraf.unlearn('imcalc')
         iraf.imcalc(x,copy,'im1*'+str(scaleFactor),verbose='yes')
 
         newStack.append(copy)
 
-    return (newStack,refZP)
+    return (newStack,refZP,refZPerr)
 
 #--------------------------------------------------------------------------------------------------------
 def parseCMD(file):
@@ -138,8 +152,7 @@ def parseCMD(file):
     return d
 
 #--------------------------------------------------------------------------------------------------------
-def singleFrame(directory,wcs=True):
-
+def singleFrame(directory,wcs=True):#,bkgSubtract=False):
 
     listFiles=['maskList.in','stackList.in']
     (stackFile,stackList,wcsList)=(open(listFiles[1],'a'),[],[])
@@ -147,7 +160,7 @@ def singleFrame(directory,wcs=True):
     (image,mask)=classifyImages(prepend=directory+'/')
     print '\nWorking on image in '+directory.strip()
 
-    scaleImage=scaleAndCombineMEF(directory+'/'+image,directory+'/'+mask)
+    scaleImage=scaleAndCombineMEF(image,mask)#,subBKG=bkgSubtract)
 
     if wcs == True:
         wcsImage=applywcs(scaleImage)
@@ -161,14 +174,14 @@ def scaleToSingleZP(stackfile='stackList.in'):
     wcsList=[]
     for x in open(stackfile,'r').readlines():
         wcsList.append(x.rstrip())
-    (stackList,finZP)=scaleZP(wcsList,wcsList[0])
+    (stackList,finZP,finZPerr)=scaleZP(wcsList,wcsList[0])
 
     if os.path.exists('finalList.in'):
         os.remove('finalList.in')
     finList=open('finalList.in','w')
      
     for x in stackList:
-        finList.write(x+'[0]\n')
+        finList.write(x+'\n')
     finList.close()
 
 #--------------------------------------------------------------------------------------------------------
@@ -188,7 +201,7 @@ def finalCombine(stackname):
     iraf.mscstack.blank=-99.0
     iraf.mscstack.lthreshold='INDEF'
     iraf.mscstack.hthreshold='INDEF'
-    iraf.mscstack.hsigma=4.0
+    iraf.mscstack.hsigma=2.0
     iraf.mscstack.lsigma='INDEF'
     iraf.mscstack.nkeep=3
     iraf.mscstack.grow=2.5
@@ -204,14 +217,8 @@ def finalCombine(stackname):
     for x in files2:
         if os.path.exists(x):
             os.remove(x)
-
-    f=open('finalList.in','r').readlines()
-    out=open('finalList2.in','w')
-    for x in f:
-        out.write(x.rstrip()[:-3]+'\n')
-    out.close()
     
-    iraf.mscstack('@finalList2.in',stackname)
+    iraf.mscstack('@finalList.in',stackname)
 
     os.remove('logfile')
         
@@ -354,18 +361,17 @@ def swarpHead(file,outfile):
     out.close()
 
 #--------------------------------------------------------------------------------------------------------
-def matchScales(inList,catFile='scale.cat',buff=1000.):
+def matchScales(searchTerm='*.fits',catFile='scale.cat'):
 
-    (x,y,ra,dec,mag,star,flag)=np.loadtxt(catFile,usecols=(0,1,2,3,4,5,6),unpack=True,comments='#')
+    (ra,dec,mag,star)=np.loadtxt(catFile,usecols=(0,1,2,3),unpack=True)
     cat=SkyCoord(ra=ra*u.degree,dec=dec*u.degree)
     idx,d2d,_=cat.match_to_catalog_sky(cat,2)
-    (xmin,xmax,ymin,ymax)=(np.min(x),np.max(x),np.min(y),np.max(y))
-    use=np.where((mag > 17.0) & (mag < 23.0) & (d2d.arcsec > 10.0) & (star > 0.9) & (flag == 0) &
-                 (x > xmin + buff) & (x < xmax - buff) & (y > ymin + buff) & (y < ymax - buff))
+    use=np.where((mag > 17.0) & (mag != 99.0) & (mag < 23.0))
     if len(use[0]) > 5000:
         good=use[0][:5000]
     else:
         good=use[0]
+#    pdb.set_trace()
     (ra,dec)=(ra[good],dec[good])
     if os.path.exists('radec.dat'):
         os.remove('radec.dat')
@@ -373,9 +379,11 @@ def matchScales(inList,catFile='scale.cat',buff=1000.):
     for x in range(len(ra)):
         out.write(str(ra[x]/15.0)+'\t'+str(dec[x])+'\n')
     out.close()
-
+    
+    files=glob.glob(searchTerm)
+    input=','.join(files)
     iraf.unlearn('mscimatch')
-    iraf.mscimatch('@'+inList,'radec.dat',scale='yes',zero='yes',box1='50',
+    iraf.mscimatch(input.replace('fits','fits[0]'),'radec.dat',scale='yes',zero='yes',box1='50',
                    box2='100',bpm='BPM',lower='-0.5',inter='yes',upper='200',niter='5',sigma='3.0')
 
 #--------------------------------------------------------------------------------------------------------
@@ -408,7 +416,7 @@ def mkScaleImage(image):
     iraf.imcalc(image,image[:-5]+'_scale.fits','(im1+'+str(add)+')*'+str(mult))
 
 #--------------------------------------------------------------------------------------------------------
-def main(file):
+def main(file,cleanup=False):
 
     print '\n===WELCOME TO MOSAIC_COMBINE==='
 
@@ -419,8 +427,8 @@ def main(file):
         singleFrame(x.rstrip())
 
     scaleToSingleZP()
-    
-#--------------------------------------------------------------------------------------------------------
-def part2(file,outname):        
-    finalCombine(outname)
+    finalCombine(stackOut)
 
+    if cleanup == True:
+        for x in ['logfile','finalList.in']:
+            os.remove(x)
