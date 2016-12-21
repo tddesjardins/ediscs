@@ -153,7 +153,20 @@ def mkZPoffs(b=0.0,v=0.0,r=0.0,i=0.0,z=0.0,k=0.0,kpno=False):
     f.close()
     
 #-----------------------------------
-def update70(fitscat,zphot='OUTPUT/photz.zout',output='v7.0.fits',zpvoff=0.0,zproff=0.0,zpioff=0.0):
+def update70(fitscat,clname,zphot='OUTPUT/photz.zout',output='v7.0.fits',zpvoff=0.0,zproff=0.0,zpioff=0.0,best=True,
+             offFile=''):
+
+    if best == True:
+        if offFile == '':
+            offFile=os.environ['EDISCS']+'/files/images/wfi_zeropoints.dat'
+
+        offsets=pd.read_table(offFile,delim_whitespace=True,
+                              header=None,names=['CLUSTER','FILTER','C1','S1','C2','S2','FLAG','OFFSET','KEEP'],
+                              comment='#',index_col=None)
+
+        (zpvoff, zproff, zpioff) = (offsets[offsets['CLUSTER'].str.contains('CL1301') & offsets['FILTER'].str.contains('V')]['OFFSET'].values[0],
+                                    offsets[offsets['CLUSTER'].str.contains('CL1301') & offsets['FILTER'].str.contains('R')]['OFFSET'].values[0],
+                                    offsets[offsets['CLUSTER'].str.contains('CL1301') & offsets['FILTER'].str.contains('I')]['OFFSET'].values[0])
     
     catalog = Table.read(fitscat).to_pandas()
     z=eazy.catIO.Readfile(zphot)
@@ -604,6 +617,8 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', tol=0.01, s
         print '\tI (vi) slope: '+str(ifit0)
         print '\tR (ri) slope: '+str(rfit20)
         print '\tI (ri) slope: '+str(ifit20)+'\n'
+
+    pdb.set_trace()
 
     if plot == True:
         plt.plot(vi,zpIvi,'ro')
@@ -1340,7 +1355,7 @@ def main(b="", v="", r="", i="", z="", k="", rb="", rk="", imglist='', rsegmap="
         for x in filts:
             if x+'img' in imgs:
                 errpars = lb.main(imgs[x+'img'][:-5]+'_bkgsub.fits', rsegmap, outplot=x+'depth.pdf', clname=clname,
-                                pixscale=pixscale, border = errborder, aprange=[0.5,2.0],maxrange=500.)
+                                    pixscale=pixscale, border = errborder, aprange=[0.5,2.0],maxrange=500.)
                 data[x+'autoerr'] = (sigfunc(auton, errpars[0], errpars[1], errpars[2])/data[x+'autoc'])*data[x+'auto']
                 data[x+'isoerr']  = (sigfunc(ison,  errpars[0], errpars[1], errpars[2])/data[x+'isoc']) *data[x+'iso']
                 data[x+'1err']    = (sigfunc(n1,    errpars[0], errpars[1], errpars[2])/data[x+'1c'])   *data[x+'1']

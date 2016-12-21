@@ -52,7 +52,8 @@ def mag2fluxOffset(magoff):
 
     return 10.**(-0.4*magoff)
 
-def main(fitsCat,maxoff=1.0,offrange=[],stepSize=0.05,fixV=-99.,fixR=-99.,fixI=-99.,maxV=20.,maxR=20.,maxI=20.,minV=-20.,minR=-20.,minI=-20.,outfile='zpAdjust.ref'):
+def main(fitsCat,maxoff=1.0,offrange=[],stepSize=0.05,fixV=-99.,fixR=-99.,fixI=-99.,maxV=20.,maxR=20.,maxI=20.,
+         minV=-20.,minR=-20.,minI=-20.,outfile='zpAdjust.ref',plots=True):
     
     #make grid of ZP offsets
     if len(offrange) < 2:
@@ -95,8 +96,9 @@ def main(fitsCat,maxoff=1.0,offrange=[],stepSize=0.05,fixV=-99.,fixR=-99.,fixI=-
 
                 (sz,line,_)=e.plotphotspec(fitsCat,selection='Rmag < 23. & Q5_7 == 4')
 
-                shutil.move('zspec_zphot.pdf','plots/zspec_zphot_'+str(x)+'.pdf')
-                shutil.move('photoz_residuals.pdf','plots/photoz_residuals_'+str(x)+'.pdf')
+                if plots == True:
+                    shutil.move('zspec_zphot.pdf','plots/zspec_zphot_'+str(x)+'.pdf')
+                    shutil.move('photoz_residuals.pdf','plots/photoz_residuals_'+str(x)+'.pdf')
 
                 outTable.write(str(sz)+'\t'+str(line)+'\n')
 
