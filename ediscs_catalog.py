@@ -1,19 +1,22 @@
-from statsmodels.formula.api import ols,rlm
+from statsmodels.formula.api import ols
+from statsmodels.formula.api import rlm
 from astropy import coordinates
 from astropy.table import Table
 from astropy import units as u
-import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
-import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
-import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
 from astropysics import obstools as obs
 from astropy.stats.funcs import biweight_location as bl
 from scipy.optimize import curve_fit
+
+from Util import constants as const
+
+import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
+import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
+import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
 import threedhst.eazyPy as eazy
 
 megaLocation='/Volumes/BAHAMUT/megacat.v5.7.fits'
 
 plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
-#plt.rc('ps',usedistiller='xpdf')
 
 #-----------------------------------
 # GENERAL NOTES
@@ -26,10 +29,6 @@ plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 #
 #    FORS photometry to solve for WFI zeropoints
 #-----------------------------------
-
-#Constants
-vega2AB={'bctio':-0.09949,'bkpno':-0.10712,'v':0.01850,'r':0.19895,'i':0.42143,'k':1.84244}
-medCterms={'VRv':-0.151,'VRr':0.0245,'VIv':-0.0725,'VIi':0.1465,'RIr':0.015,'RIi':0.238}
 
 #Fields for FITS catalogs
 colNames=('field','ids','ra','dec','x','y','ebv','fwhmR','fB1','fB1err','fB2','fB2err','fB3','fB3err','fBiso',
@@ -51,12 +50,13 @@ colNames70=('field','ids','ra','dec','x','y','ebv','fwhmR','fB1','fB1err','fB2',
           'sexflagV','sexflagR','sexflagI','sexflagz','sexflagK','wK')
 
 
-#Flux and error column names
-fluxNames = [x for x in list(colNames) if re.match('(?!.*err)f[BVRIzK].',x)]
-errNames  = [x for x in list(colNames) if re.match('(?=.*err)f[BVRIzK].',x)]
+# Flux and error column names
+fluxNames = [x for x in list(colNames) if re.match('(?!.*err)f[BVRIzK].', x)]
+errNames = [x for x in list(colNames) if re.match('(?=.*err)f[BVRIzK].', x)]
 
-#Set up data types for FITS catalogs. All values should be floats except the SExtractor flags (int), LDP quality (int)
-#field names (str), and WFI ID names (str)
+# Set up data types for FITS catalogs. All values should be
+# floats except the SExtractor flags (int), LDP quality (int)
+# field names (str), and WFI ID names (str).
 Fdtype=('f;'*len(colNames)).split(';')[:-1]
 for x in range(len(Fdtype)):
     if ('field' in colNames[x]) or ('ids' in colNames[x]):
@@ -77,23 +77,22 @@ Fdtype70 = tuple(Fdtype70)
 #Define a series of functions that are for fitting the zeropoints by comparing the WFI and FORS observations
 #of stars using a constant color term, but allowing the zeropoint to vary. A separate function was necessary
 #for each color (e.g., V-R, R-I, etc.) to fix the slope to different values unique to each color.
-def fixedVRv(x,zp):
-    return (medCterms['VRv']*x)+zp
 
-def fixedVRr(x,zp):
-    return (medCterms['VRr']*x)+zp
 
-def fixedVIv(x,zp):
-    return (medCterms['VIv']*x)+zp
+def fixed_mag_color(x, zp, type):
+    """
+    PURPOSE
+    -------
 
-def fixedVIi(x,zp):
-    return (medCterms['VIi']*x)+zp
+    This function is designed to be used for fitting zeropoints by comparing the WFI
+    and FORS observations of stars using a constant color term, but allowing the
+    zeropoint to vary.
+    """
 
-def fixedRIr(x,zp):
-    return (medCterms['RIr']*x)+zp
-
-def fixedRIi(x,zp):
-    return (medCterms['RIi']*x)+zp
+    constants = const.Constants()
+    magnitude = zp + (constants.med_cterms(type) * x)
+    
+    return magnitude
 
 #-----------------------------------
 def randomSample(catalog,filters,output1='randomFirst.fits',output2='randomSecond.fits',
@@ -267,18 +266,29 @@ def matchxy(x1,y1,x2,y2,tol=0.1):
 
     return np.array(match)
 
-#-----------------------------------
-def backZP(flux,mag):
-    """PURPOSE: Backout the zeropoint for a source knowing its flux in detector units and its physical magnitude
+def get_zp(flux,mag):
+    """
+    PURPOSE
+    -------
+    Backout the zeropoint for a source knowing its flux in detector units and its physical magnitude.
 
-    INPUTS:
-    \tflux - flux in detector units (counts or counts/second)
-    \tmag  - magnitude in physical units (note that if this is in AB mag, the result includes the AB conversion factor)
+    INPUTS
+    ------
+    flux (float):
+        flux in detector units (counts or counts/second)
+    mag (float):
+        magnitude in physical units (note that if this is in AB mag, the result includes the AB
+        conversion factor)
     
-    RETURNS: The zeropoint to convert between detector flux and physical magnitude
+    RETURNS
+    -------
+    The zeropoint to convert between detector flux and physical magnitude
     """
 
-    return 2.5*np.log10(flux)+mag
+    zp = 2.5 * np.log10(flux) + mag
+
+    return zp
+
 
 #-----------------------------------
 #def getSmoothFactor(rcat,xcat,class_star=0.0,border=1500.,pixscale=0.238,save=False):
