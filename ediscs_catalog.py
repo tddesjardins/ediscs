@@ -1,5 +1,6 @@
 from statsmodels.formula.api import ols
 from statsmodels.formula.api import rlm
+from astroquery.irsa_dust import IrsaDust
 from astropy import coordinates
 from astropy.table import Table
 from astropy import units as u
@@ -8,6 +9,7 @@ from astropy.stats.funcs import biweight_location as bl
 from scipy.optimize import curve_fit
 
 from Util import constants as const
+from Util import ediscs_tools as etools
 
 import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
 import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
@@ -77,22 +79,6 @@ Fdtype70 = tuple(Fdtype70)
 #Define a series of functions that are for fitting the zeropoints by comparing the WFI and FORS observations
 #of stars using a constant color term, but allowing the zeropoint to vary. A separate function was necessary
 #for each color (e.g., V-R, R-I, etc.) to fix the slope to different values unique to each color.
-
-
-def fixed_mag_color(x, zp, type):
-    """
-    PURPOSE
-    -------
-
-    This function is designed to be used for fitting zeropoints by comparing the WFI
-    and FORS observations of stars using a constant color term, but allowing the
-    zeropoint to vary.
-    """
-
-    constants = const.Constants()
-    magnitude = zp + (constants.med_cterms(type) * x)
-    
-    return magnitude
 
 #-----------------------------------
 def randomSample(catalog,filters,output1='randomFirst.fits',output2='randomSecond.fits',
@@ -266,29 +252,6 @@ def matchxy(x1,y1,x2,y2,tol=0.1):
 
     return np.array(match)
 
-def get_zp(flux,mag):
-    """
-    PURPOSE
-    -------
-    Backout the zeropoint for a source knowing its flux in detector units and its physical magnitude.
-
-    INPUTS
-    ------
-    flux (float):
-        flux in detector units (counts or counts/second)
-    mag (float):
-        magnitude in physical units (note that if this is in AB mag, the result includes the AB
-        conversion factor)
-    
-    RETURNS
-    -------
-    The zeropoint to convert between detector flux and physical magnitude
-    """
-
-    zp = 2.5 * np.log10(flux) + mag
-
-    return zp
-
 
 #-----------------------------------
 #def getSmoothFactor(rcat,xcat,class_star=0.0,border=1500.,pixscale=0.238,save=False):
@@ -428,12 +391,7 @@ def photscript(listfile,clname,photfile='photscript'):
 #    return data
 
 #-----------------------------------
-def sigfunc(N,s,a,b):
-    """
-    PURPOSE: Function from qquation 3 from Labbe et al. (2003), ApJ, 125, 1107. 
-    """
-    
-    return (N*s*(a+(b*N)))
+
 
 #-----------------------------------
 #def binAvgData(x, y, npts, minimum = -999999.0, maximum = 9999999.0):
@@ -470,57 +428,6 @@ def sigfunc(N,s,a,b):
 #        i = i + width
 #
 #    return (xm, ym)
-
-#-----------------------------------
-def getEBV(ra,dec,path='/Users/tyler/Downloads/'):
-    """
-    PURPOSE: For a given RA and Dec, lookup the E(B-V) value from the Schlegel dust maps.
-
-    INPUTS:
-    \tra  - Right ascension (deg; J2000)
-    \tdec - Declination (deg; J2000)
-
-    RETURNS: E(B-V)
-    """
-
-    if os.path.exists('SFD_dust_4096_ngp.fits') == False:
-        shutil.copy(path+'SFD_dust_4096_ngp.fits','.')
-    if os.path.exists('SFD_dust_4096_sgp.fits') == False:
-        shutil.copy(path+'SFD_dust_4096_sgp.fits','.')
-
-    galcoord = coordinates.SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5').galactic
-    (latitude, longitude) = (galcoord.l.degree, galcoord.b.degree)
-    ebv = obs.get_SFD_dust(latitude, longitude)
-        
-    return ebv
-
-#-----------------------------------
-def calflux(flux, zp, abconv = 0.0):
-    """
-    PURPOSE: Converts an instrumental flux into a physical one in flux space to preserve negative values.
-
-    INPUTS:
-    \tflux   - instrumental flux
-    \tzp     - zeropoint to convert instrumental to calibrated flux
-    \tabconv - conversion factor from Vega to AB magnitudes (optional)
-
-    RETURNS: Flux in uJy
-    """
-
-    return ((flux)/(10.0**(0.4*(zp + abconv)))) * 3631.0 * 1e6
-        
-#-----------------------------------
-def flux2mag(flux, zp, abconv = 0.0):
-
-    return -2.5 * np.log10(flux) + zp + abconv
-
-#-----------------------------------
-def mag2flux(mag, ab2ujy=False):
-
-    if ab2ujy == False:
-        return 10.0**(-0.4 * mag)
-    else:
-        return 10.0**(-0.4 * mag) * 3631.0 * 1e6
     
 #-----------------------------------
 #def ab2ujy(mag):

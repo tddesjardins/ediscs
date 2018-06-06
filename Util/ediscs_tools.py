@@ -7,6 +7,8 @@ from astropy import units as u
 from astroquery.irsa_dust import IrsaDust
 from astropy import coordinates as coords
 
+import numpy as np
+
 
 def get_zp(flux, mag):
     """
@@ -103,3 +105,78 @@ def get_ebv(ra, dec, radius=2*u.deg, frame='fk5'):
     ebv = extinct_tab['ext SFD mean'][0]
 
     return ebv
+
+
+class MagTools(object, flux=0.0, mag=0.0, zp=0.0, ab_conv=0.0):
+    """
+    An object to contain functions related to transforming between fluxes
+    and magnitudes.
+    """
+
+    def __init__(self):
+
+        self.flux = flux
+        self.mag = mag
+        self.zp = zp
+        self.ab_conv = ab_conv
+
+    def flux_to_mag(self):
+        """
+        PURPOSE
+        -------
+        Calculate a magnitude for a given flux, zeropoint, and AB conversion
+        factor.
+
+        RETURNS
+        -------
+        magnitude (float):
+            The magnitude corresponding to the input flux, zeropoint, and AB
+            conversion factor.
+        """
+
+        magnitude = -2.5 * np.log10(self.flux) + self.zp + self.ab_conv
+
+        return magnitude
+
+    def mag_to_flux(self, ujy=True):
+        """
+        PURPOSE
+        -------
+        Calculate the flux of a source given a calibrated physical flux.
+
+        INPUTS
+        ------
+        ujy (bool):
+            If true, the output will be in units of uJy. Otherwise, the flux
+            will have the units of the flux reference used to calculate
+            the input magnitude.
+
+        RETURNS
+        -------
+        flux (float):
+            The flux that corresponds to the input magnitude.
+        """
+
+        flux = 10**(-0.4 * self.mag)
+        if ujy:
+            flux *= (3631.0 * 1e6)
+
+        return flux
+
+    def physical_flux(self):
+        """
+        PURPOSE
+        -------
+        Calculate the calibrated physical flux given an instrumental flux,
+        a zeropoint, and an AB magnitude conversion factor.
+
+        RETURNS
+        -------
+        calib_flux (float):
+            A calibrated physical flux in units of uJy.
+        """
+
+        self.mag = self.flux_to_mag()
+        calib_flux = self.mag_to_flux(ujy=True)
+
+        return calib_flux
