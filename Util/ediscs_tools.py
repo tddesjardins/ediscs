@@ -107,6 +107,46 @@ def get_ebv(ra, dec, radius=2*u.deg, frame='fk5'):
     return ebv
 
 
+def matchxy(x1, y1, x2, y2, tol=0.1):
+    """
+    PURPOSE
+    -------
+    For a given set of (x,y) coordinates, find the index of the best match from
+    a list of (x,y) coordinates.
+
+    INPUTS
+    ------
+    x1 (float):
+        X position of interest.
+
+    y1 (float):
+        Y position of interest.
+
+    x2 (numpy.array):
+        Numpy array of X positions (floats) that are being matched against.
+
+    y2 (numpy.array):
+        Numpy array of Y positions (float) that are being matched against.
+
+    tol (float):
+        Matching tolerance.
+
+    RETURNS
+    ------
+    best_match (int):
+        The index in the arrays being matched against containing the best match.
+        If no match is <= the tol value, then None is returned.
+    """
+
+    distance = np.sqrt((x1 - x2)**2 + (y1-y2)**2)
+    if np.min(distance) <= tol:
+        best_match = np.where(distance == np.min(distance))[0][0]
+    else:
+        best_match = None
+
+    return best_match
+
+
 class MagTools(object, flux=0.0, mag=0.0, zp=0.0, ab_conv=0.0):
     """
     An object to contain functions related to transforming between fluxes
