@@ -5,10 +5,11 @@ from astropy import units as u
 import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
 import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
 import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
-from astropysics import obstools as obs
+# from astropysics import obstools as obs
 from astropy.stats.funcs import biweight_location as bl
 from scipy.optimize import curve_fit
 import threedhst.eazyPy as eazy
+from sfd import ebv
 
 megaLocation='/Volumes/BAHAMUT/megacat.v5.7.fits'
 
@@ -473,16 +474,18 @@ def getEBV(ra,dec,path='/Users/tyler/Downloads/'):
     RETURNS: E(B-V)
     """
 
-    if os.path.exists('SFD_dust_4096_ngp.fits') == False:
-        shutil.copy(path+'SFD_dust_4096_ngp.fits','.')
-    if os.path.exists('SFD_dust_4096_sgp.fits') == False:
-        shutil.copy(path+'SFD_dust_4096_sgp.fits','.')
+    # if os.path.exists('SFD_dust_4096_ngp.fits') == False:
+    #    shutil.copy(path+'SFD_dust_4096_ngp.fits','.')
+    # if os.path.exists('SFD_dust_4096_sgp.fits') == False:
+    #    shutil.copy(path+'SFD_dust_4096_sgp.fits','.')
 
-    galcoord = coordinates.SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5').galactic
-    (latitude, longitude) = (galcoord.l.degree, galcoord.b.degree)
-    ebv = obs.get_SFD_dust(latitude, longitude)
+    galcoord = coordinates.SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5')
+    # (latitude, longitude) = (galcoord.l.degree, galcoord.b.degree)
+    # ebv = obs.get_SFD_dust(latitude, longitude)
+
+    ebv_value = ebv(galcoord)
         
-    return ebv
+    return ebv_value
 
 #-----------------------------------
 def calflux(flux, zp, abconv = 0.0):
