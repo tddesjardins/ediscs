@@ -3,7 +3,7 @@ import matplotlib.cm as cm
 from astropy import units as u
 from astropy import coordinates
 import matplotlib.patches as patches
-from astropy.stats.funcs import biweight_location as bl
+from astropy.stats import biweight_location as bl
 from matplotlib.colors import LogNorm
 
 

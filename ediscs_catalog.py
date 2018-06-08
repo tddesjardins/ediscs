@@ -6,9 +6,9 @@ import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
 import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
 import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
 # from astropysics import obstools as obs
-from astropy.stats.funcs import biweight_location as bl
+from astropy.stats import biweight_location as bl
 from scipy.optimize import curve_fit
-import threedhst.eazyPy as eazy
+# import threedhst.eazyPy as eazy
 from sfd import ebv
 
 megaLocation='/Volumes/BAHAMUT/megacat.v5.7.fits'
@@ -479,11 +479,11 @@ def getEBV(ra,dec,path='/Users/tyler/Downloads/'):
     # if os.path.exists('SFD_dust_4096_sgp.fits') == False:
     #    shutil.copy(path+'SFD_dust_4096_sgp.fits','.')
 
-    galcoord = coordinates.SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5')
+    galcoord = coordinates.SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='fk5').galactic
     # (latitude, longitude) = (galcoord.l.degree, galcoord.b.degree)
     # ebv = obs.get_SFD_dust(latitude, longitude)
 
-    ebv_value = ebv(galcoord)
+    ebv_value = ebv(galcoord) / 0.86
         
     return ebv_value
 

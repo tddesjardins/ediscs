@@ -1,7 +1,7 @@
 import photutils as phot
 import numpy as np
 from scipy import optimize
-from astropy.stats.funcs import biweight_midvariance as bmv
+from astropy.stats import biweight_midvariance as bmv
 import pyfits as pf
 import pdb,os,math
 import matplotlib.pyplot as plt
