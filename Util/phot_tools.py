@@ -90,7 +90,7 @@ def merge_catalogs(catalogs):
     """
 
     global master_tab
-    
+
     for filter in catalogs.keys():
         cat_table = SExtractor().read(catalogs[filter])
 
