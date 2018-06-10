@@ -89,6 +89,8 @@ def merge_catalogs(catalogs):
         The table containing the merged catalogs.
     """
 
+    global master_tab
+    
     for filter in catalogs.keys():
         cat_table = SExtractor().read(catalogs[filter])
 
