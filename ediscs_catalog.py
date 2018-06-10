@@ -1,23 +1,23 @@
 from statsmodels.formula.api import ols
 from statsmodels.formula.api import rlm
-from astroquery.irsa_dust import IrsaDust
-from astropy import coordinates
-from astropy.table import Table
-from astropy import units as u
-from astropysics import obstools as obs
-from astropy.stats.funcs import biweight_location as bl
+from astropy.stats import biweight_location as bl
 from scipy.optimize import curve_fit
-
-from Util import constants as const
-from Util import ediscs_tools as etools
-from astropy.io import fits
-
 import pdb, shlex, os, shutil, pandas, statsmodels.api as sm, numpy as np
 import matplotlib.pyplot as plt, matplotlib.cm as cm, photcheck as pc, re
-import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
+import subprocess as sp, labbe_depth as lb, pyfits as pf, pandas as pd
 import threedhst.eazyPy as eazy
 
-megaLocation='/Volumes/BAHAMUT/megacat.v5.7.fits'
+# These are confirmed used:
+from astropy.io import fits
+from astropy.table import Table
+from astropy import coordinates
+from astropy import units as u
+from Util import constants as const
+from Util import ediscs_tools as etools
+from Util import phot_tools as ptools
+
+import random
+
 
 plt.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
@@ -76,51 +76,9 @@ for x in range(len(Fdtype70)):
         Fdtype70[x] = 'i'
 Fdtype70 = tuple(Fdtype70)
 
-#-----------------------------------
-#Define a series of functions that are for fitting the zeropoints by comparing the WFI and FORS observations
-#of stars using a constant color term, but allowing the zeropoint to vary. A separate function was necessary
-#for each color (e.g., V-R, R-I, etc.) to fix the slope to different values unique to each color.
 
 #-----------------------------------
-def randomSample(catalog,filters,output1='randomFirst.fits',output2='randomSecond.fits',
-                 classStar=0.3,Q=4):
-    """
-    PURPOSE: Generate a random sample of galaxies from the photometric catalog of a single cluster.
-    \tAlso generate a second FITS file of the other galaxies not in the random sample.'
 
-    INPUTS:
-    \tcatalog   - FITS photometric catalog
-    \tfilters   - string list of the filter names (e.g., BVRIzK)
-    \toutput1   - Name of random sample FITS catalog
-    \toutput2   - Name of FITS catalog with galaxies NOT in the random sample
-    \tclassStar - SExtractor class_star value to perform cut on (selects objects with class_star < this value)
-    \tQ         - LDP quality flag for selecting sources
-
-    RETURNS: None.
-    """
-        
-    select = 'class_StarR < '+str(classStar)+' & Q5_7 == '+str(Q)+' & '+' & '.join(['sexflag'+x+' == 0' for x in filters])
-
-    data = Table.read(catalog).to_pandas()
-    trimData = data.query(select)
-
-    idx=xrange(len(trimData))
-    sample = random.sample(idx,int(np.ceil(len(trimData)/2.)))
-    inverse = []
-    for x in idx:
-        if x not in sample:
-            inverse.append(x)
-    first = trimData.iloc[sample]
-    second = trimData.iloc[inverse]
-    
-    fitsCols = list(trimData.columns.values)
-    firstDict = {colNames[x]:first[fitsCols[x]].values for x in range(len(fitsCols))}
-    secondDict = {colNames[x]:second[fitsCols[x]].values for x in range(len(fitsCols))}
-    galsDict = {colNames[x]:trimData[fitsCols[x]].values for x in range(len(fitsCols))}
-
-    Table(firstDict, names=colNames, dtype=Fdtype).write(output1,format='fits',overwrite=True)
-    Table(secondDict, names=colNames, dtype=Fdtype).write(output2,format='fits',overwrite=True)
-    Table(galsDict, names=colNames, dtype=Fdtype).write('galaxies.fits',format='fits',overwrite=True)
 
 #-----------------------------------
 def mkZPoffs(b=0.0,v=0.0,r=0.0,i=0.0,z=0.0,k=0.0,kpno=False):
@@ -407,72 +365,7 @@ def zpWFI(ra, dec, v, r, i, v3, r3, i3, starR, photref = 'fors.dat', tol=0.01, s
     (vmagab, rmagab, imagab) = (vmag + vega2AB['v'], rmag + vega2AB['r'], imag + vega2AB['i'])
     (vab, rab, iab) = (mag2flux(vmagab, ab2ujy=True), mag2flux(rmagab, ab2ujy=True), mag2flux(imagab, ab2ujy=True))
     return (vab, rab, iab, zpv + vega2AB['v'], zpr + vega2AB['r'], zpi + vega2AB['i'])
-                
-#-----------------------------------
-def mergeLists(b="",v="",r="",i="",z="",k="",rimg="",zpb=0.0,zpk=0.0,null=-99):
-    """
-    """
 
-    (foo1,foo2)=np.loadtxt(r, usecols = (0,1), unpack=True, comments= '#')
-    nsrcs=len(foo1)
-    nullArr = np.zeros(nsrcs) + null
-    columnsR = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
-    columnsX = (4, 5, 6, 7, 8, 15)
-    
-    if b != "":
-        (b1, b2, b3, biso, bauto, sexflagB) = np.loadtxt(b, usecols = columnsX,
-                                                         unpack = True, comments = '#')
-    else:
-        (b1, b2, b3, biso, bauto, sexflagB) = (np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null,
-                                               np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null)                                                            
-         
-    if v != "":
-        (v1, v2, v3, viso, vauto, sexflagV) = np.loadtxt(v, usecols = columnsX, unpack = True, comments = '#')
-    else:
-        (v1, v2, v3, viso, vauto, sexflagV) = (np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null,
-                                               np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null)                                                             
-
-    (x, y, r1, r2, r3, riso, rauto, fwhmR, kronR, aimage,
-     bimage, theta, isoarea, starR, sexflagR) = np.loadtxt(r, usecols = columnsR, unpack = True, comments = '#')
-    
-    fwhmR = fwhmR * 3600.0
-    majorax = kronR * aimage
-    minorax = kronR * bimage
-    
-    if i != "":
-        (i1, i2, i3, iiso, iauto, sexflagI) = np.loadtxt(i, usecols = columnsX, unpack = True, comments = '#')
-    else:
-        (i1, i2, i3, iiso, iauto, sexflagI) = (np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null,
-                                               np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null)
-    
-    if z != "":
-        (z1, z2, z3, ziso, zauto, sexflagz) = np.loadtxt(z, usecols = columnsX, unpack = True, comments = '#')
-    else:
-        (z1, z2, z3, ziso, zauto, sexflagz) = (np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null,
-                                               np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null)
-        
-    if k != "":
-        (k1, k2, k3, kiso, kauto, sexflagK) = np.loadtxt(k, usecols = columnsX, unpack = True, comments = '#')
-    else:
-        (k1, k2, k3, kiso, kauto, sexflagK) = (np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null,
-                                               np.zeros(nsrcs)+null, np.zeros(nsrcs)+null, np.zeros(nsrcs)+null)
-
-    #Convert (x,y) into RA and Dec
-    np.savetxt('dummy.foobar', np.c_[(x, y)])
-    sp.Popen('xy2sky -d '+rimg+' @dummy.foobar > dummy2.foobar', shell=True).wait()
-    (ra, dec) = np.loadtxt('dummy2.foobar', usecols = (0, 1), unpack = True)
-    os.remove('dummy.foobar')
-    os.remove('dummy2.foobar')
-    
-    data = {'ra':ra, 'dec':dec, 'x':x, 'y':y, 'b1':b1, 'b2':b2, 'b3':b3, 'biso':biso, 'bauto':bauto,
-            'sexflagB':sexflagB, 'v1':v1, 'v2':v2, 'v3':v3, 'viso':viso, 'vauto':vauto, 'sexflagV':sexflagV,
-            'r1':r1, 'r2':r2, 'r3':r3, 'riso':riso, 'rauto':rauto, 'starR':starR, 'sexflagR':sexflagR, 'i1':i1, 'i2':i2,
-            'i3':i3, 'iiso':iiso, 'iauto':iauto, 'sexflagI':sexflagI, 'z1':z1, 'z2':z2, 'z3':z3, 'ziso':ziso,
-            'zauto':zauto, 'sexflagz':sexflagz, 'k1':k1, 'k2':k2, 'k3':k3, 'kiso':kiso, 'kauto':kauto,
-            'sexflagK':sexflagK, 'fwhmR':fwhmR, 'kron_a':majorax, 'kron_b':minorax, 'isoarea':isoarea,
-            'theta':theta}
-
-    return data
             
 #-----------------------------------
 def updateBCat(b='',r='',rb='',zpb='',imglist='imglist',rsegmap='',oldcat='',null=-99,xmin=0.,xmax=1e6,
@@ -818,11 +711,10 @@ def updateKCat(k='',r='',rk='',zpk='',imglist='imglist',rsegmap='',oldcat='',nul
                              'sexflagz','sexflagK'))
     tab.write(outname, format='fits', overwrite=True)
 
-#-----------------------------------
-def main(imgs, cluster_name, detection_image='rimg', use_megacat=True,
-         zpb=0.0, zpk=0.0, zpz=0.0, null=-99, kpno = False, ,pixscale=0.238,
-         outprefix='',synth=False, megacat=megaLocation,maxz=100.,
-         xmin=-99,xmax=-99,ymin=-99,ymax=-99,errborder=50.0,errs=True,wkimg='',fors='',classStar=0.9):
+
+def main(imgs, cluster_name, detection_image='rimg', use_megacat=True, kpno=False, zpb=0.0, zpk=0.0, zpz=0.0,
+         null_value=np.nan, pixscale=0.238, synth=False, xmin=-99, xmax=-99, ymin=-99, ymax=-99, errborder=50.0, errs=True,
+         wkimg='', fors='', classStar=0.9):
     """
     PURPOSE
     -------
@@ -857,23 +749,26 @@ def main(imgs, cluster_name, detection_image='rimg', use_megacat=True,
 
     ab_conv = const.Constants().vega_to_ab()
     ab_conv['b'] = ab_conv['bkpno'] if kpno else ab_conv['bctio']
-        
-    #Merge the SExtractor photometry from different filters into one dictionary
-    print '\n---------\nMERGING CATALOGS\n---------\n'
-    
-    data=mergeLists(b=b, v=v, r=r, i=i, z=z, k=k, rimg=imgs['rimg'], zpb=zpb, zpk=zpk, null=null)
 
-    (foo1,foo2)=np.loadtxt(r, usecols = (0,1), unpack=True, comments= '#')
-    nsrcs=len(foo1)
+    zeropoints = {'zpb': zpb, 'zpk': zpk, 'zpz': zpz}
+
+    # ---------------------------
+    # Merge SExtractor catalogs |
+    # ---------------------------
+
+    raw_catalogs = ptools.merge_catalogs(catalogs)
+    number_sources = len(raw_catalogs)
+
+    # Not sure if I need this anywhere yet:
+    null_array = np.zeros(number_sources) + null_value
 
     # ----------------------------------
     # Get LDP information from MegaCat |
     # ----------------------------------
 
-    #Add in LDP redshifts
     if use_megacat and ('MEGACAT' in os.environ):
         with fits.open(os.environ['MEGACAT']) as mega_hdu:
-            mega_table = mega_hdu[1].data
+            mega_table = Table(mega_hdu[1].data)
 
     (mzldp,mqual)=(megadat['zldp'],megadat['q'])
 
@@ -882,7 +777,6 @@ def main(imgs, cluster_name, detection_image='rimg', use_megacat=True,
     idx, d2d, _ = wfiSky.match_to_catalog_sky(megaSky)
     match = np.where(d2d.arcsec <= 0.5)
 
-    nullArr = np.zeros(len(data['ra'])) - 99.0
     wzldp = np.zeros(len(data['ra'])) - 99.0
     wqual = np.zeros(len(data['ra'])) - 99.0
 
