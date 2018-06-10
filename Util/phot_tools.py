@@ -1,56 +1,68 @@
+import os
 
 
-def photscript(listfile, clname, photfile='photscript'):
+def phot_script(img_dict, detection_img='rimg', outfile=None, clobber=False):
     """
-    PURPOSE: Generate a script (to be called on with source from the command line) that will run SExtractor on
-    \tall input images in dual-image mode (using the R-band for detection) for a cluster.
+    PURPOSE
+    -------
+    Generate the commands necessary to run Source Extractor on the input images for a given cluster.
+    When the commands are run using Source Extractor, a background subtracted image will be
+    generated for each input image with the suffix "_bkgsub.fits" appended to it. For the detection
+    image, a segmentation image will also be generated with the suffix "_segmap.fits" appended.
 
-    INPUTS:
-    \tlistfile - two columns of ?img (where ? is the filter letter) and image file names
-    \tclname   - name of the cluster (e.g., cl1354)
-    \tphotfile - name of the output script file (optional)
+    INPUTS
+    ------
+    img_dict (dict):
+        Python dictionary of the images for a particular cluster.
 
-    RETURNS: None.
+    detection_img (str):
+        Key for the detection image in img_dict to be used with Source Extractor's dual-image mode.
+        If the key is missing from img_dict, a KeyError will be raised. Default is "rimg" for the
+        R-band image. Note that the names of the dictionary keys are technically arbitrary, though
+        values that make sense should be used.
+
+    outfile (str):
+        If specified, save the Source Extractor commands to a file. Default is None.
+
+    clobber (bool):
+        Overwrite outfile if it exists. Default is False.
+
+    OUTPUTS
+    -------
+    phot_string (str):
+        The string containing the Source Extractor commands for all input images.
     """
 
-    (keys, files) = np.loadtxt(listfile, usecols=(0, 1), unpack=True,
-                               dtype={'names': ('keys', 'files'), 'formats': ('S5', 'S30')})
-    imgs = {}
-    for x in range(len(keys)):
-        imgs[keys[x]] = files[x]
+    if detection_img not in img_dict:
+        raise KeyError('Detection image missing! Could not find key "{}" in input dictionary.'.format(detection_img))
 
-    outfile = open('photscript', 'w')
+    phot_string = []
 
-    string1 = 'sex -c ediscs.sex -BACKPHOTO_TYPE "GLOBAL" -CATALOG_NAME '
-    string2 = ' -CHECKIMAGE_TYPE "-BACKGROUND" -CHECKIMAGE_NAME '
-    finalString = ''
+    for filt in img_dict.keys():
 
-    finalString = finalString + string1 + clname + '_r.cat' + ' -CHECKIMAGE_TYPE "-BACKGROUND,SEGMENTATION" -CHECKIMAGE_NAME "' \
-                  + imgs['rimg'][:-5] + '_bkgsub.fits' + ',' + imgs['rimg'][:-5] + '_segmap.fits" ' + imgs[
-                      'rimg'] + ',' + imgs['rimg'] + '\n'
+        root_name = img_dict[filt].split('.')[0]
+        catalog_name = root_name + '.cat'
 
-    if 'bimg' in keys:
-        finalString = finalString + string1 + clname + '_b.cat' + string2 + imgs['bimg'][:-5] + '_bkgsub.fits ' + imgs[
-            'rimg'] + ',' + imgs['bimg'] + '\n'
-    if 'vimg' in keys:
-        finalString = finalString + string1 + clname + '_v.cat' + string2 + imgs['vimg'][:-5] + '_bkgsub.fits ' + imgs[
-            'rimg'] + ',' + imgs['vimg'] + '\n'
-    if 'iimg' in keys:
-        finalString = finalString + string1 + clname + '_i.cat' + string2 + imgs['iimg'][:-5] + '_bkgsub.fits ' + imgs[
-            'rimg'] + ',' + imgs['iimg'] + '\n'
-    if 'zimg' in keys:
-        finalString = finalString + string1 + clname + '_z.cat' + string2 + imgs['zimg'][:-5] + '_bkgsub.fits ' + imgs[
-            'rimg'] + ',' + imgs['zimg'] + '\n'
-    if 'kimg' in keys:
-        finalString = finalString + string1 + clname + '_k.cat' + string2 + imgs['kimg'][:-5] + '_bkgsub.fits ' + imgs[
-            'rimg'] + ',' + imgs['kimg'] + '\n'
-    if 'rbimg' in keys:
-        finalString = finalString + string1 + clname + '_rb.cat' + string2 + imgs['rbimg'][:-5] + '_bkgsub.fits ' + \
-                      imgs['rimg'] + ',' + imgs['rbimg'] + '\n'
-    if 'rkimg' in keys:
-        finalString = finalString + string1 + clname + '_rk.cat' + string2 + imgs['rkimg'][:-5] + '_bkgsub.fits ' + \
-                      imgs['rimg'] + ',' + imgs['rkimg'] + '\n'
+        if filt is detection_img:
+            out_img_types = '-BACKGROUND,SEGMENTATION'
+            out_img_names = '{}_bkgsub.fits, {}_segmap.fits'.format(root_name, root_name)
+        else:
+            out_img_types = '-BACKGROUND'
+            out_img_names = '{}_bkgsub.fits'.format(root_name)
 
-    out = open(photfile, 'w')
-    out.write(finalString)
-    out.close()
+        phot_string.append(('sex -c ediscs.sex -BACKPHOTO_TYPE "GLOBAL" -CATALOG_NAME {} -CHECKIMAGE_TYPE "{}" '
+                            '-CHECKIMAGE_NAME "{}" {} {}').format(catalog_name, out_img_types, out_img_names,
+                                                                  img_dict[detection_img], img_dict[filt]))
+
+    if outfile is not None:
+        if os.path.exists(outfile):
+            if clobber:
+                os.remove(outfile)
+            else:
+                raise OSError('{} already exists and clobber is False.'.format(outfile))
+        out = open(outfile, 'w')
+        for x in phot_string:
+            out.write(x + '\n')
+        out.close()
+
+    return phot_string
