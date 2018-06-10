@@ -1,3 +1,5 @@
+from astropy.io.ascii import SExtractor
+from astropy.table import join
 import os
 
 
@@ -60,9 +62,43 @@ def phot_script(img_dict, detection_img='rimg', outfile=None, clobber=False):
                 os.remove(outfile)
             else:
                 raise OSError('{} already exists and clobber is False.'.format(outfile))
-        out = open(outfile, 'w')
-        for x in phot_string:
-            out.write(x + '\n')
-        out.close()
+        with open(outfile, 'w') as out:
+            out.write('\n'.join(phot_string))
 
     return phot_string
+
+
+def merge_catalogs(catalogs):
+    """
+    PURPOSE
+    -------
+    Merge multiple Source Extractor output catalogs into one astropy table. Column names will be renamed to
+    include the keys of the input dictionary (assumed to be the filter names or some other identifying
+    information). Assumes that the catalogs being matched contain identical source lists on a line-by-line
+    basis.
+
+    INPUTS
+    ------
+    catalogs (dict):
+        A Python dictionary containing the file names of the catalogs. The keys of the dictionary will be
+        used to uniquely identify each column.
+
+    OUTPUTS
+    -------
+    master_tab (astropy table):
+        The table containing the merged catalogs.
+    """
+
+    for filter in catalogs.keys():
+        cat_table = SExtractor().read(catalogs[filter])
+
+        for colname in list(cat_table.columns):
+            if 'NUMBER' not in colname:
+                cat_table.rename_column(colname, '{}_{}'.format(filter, colname))
+
+        try:
+            master_tab = join(master_tab, cat_table, keys='NUMBER')
+        except NameError:
+            master_tab = cat_table
+
+    return master_tab
