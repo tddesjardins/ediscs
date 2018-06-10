@@ -4,14 +4,15 @@ class Constants(object):
     other parts of the code. For example:
 
     >>> from Util import constants as const
-    >>> med_cterms = const.Constants.med_cterms
+    >>> med_cterm = const.Constants.med_cterm('vr_v')
+    >>> ab_const_r = const.Constants.vega_to_ab(key='r')
     """
 
     def __init__(self):
 
         return None
 
-    def med_cterms(self, key):
+    def med_cterm(self, key):
 
         med_cterms_arr = {'vr_v': -0.151, 'vr_r': 0.0245, 'vi_v': -0.0725, 'vi_i': 0.1465,
                           'ri_r': 0.015, 'ri_i': 0.238}
