@@ -23,14 +23,17 @@ class Constants(object):
 
         return value
 
-    def vega_to_ab(self, key):
+    def vega_to_ab(self, key=None):
 
         vega_to_ab_arr = {'bctio': -0.09949, 'bkpno': -0.10712, 'v': 0.01850, 'r': 0.19895,
                           'i': 0.42143, 'k': 1.84244}
 
-        try:
-            value = vega_to_ab_arr[key.lower()]
-        except KeyError:
-            raise KeyError('Did not recognize key {} for vega_to_ab!'.format(key.lower()))
+        if key is None:
+            value = vega_to_ab_arr
+        else:
+            try:
+                value = vega_to_ab_arr[key.lower()]
+            except KeyError:
+                raise KeyError('Did not recognize key {} for vega_to_ab!'.format(key.lower()))
 
-        return vega_to_ab_arr
+        return value
