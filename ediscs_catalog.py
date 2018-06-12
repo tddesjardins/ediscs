@@ -9,7 +9,7 @@ import subprocess as sp, labbe_depth as lb, pyfits as pf, random, pandas as pd
 from astropy.stats import biweight_location as bl
 from scipy.optimize import curve_fit
 # import threedhst.eazyPy as eazy
-from sfd import ebv
+from sfdmap import ebv
 
 megaLocation='/Volumes/BAHAMUT/megacat.v5.7.fits'
 
