@@ -76,7 +76,9 @@ def get_ebv(ra, dec, frame='fk5'):
     PURPOSE
     -------
     Determine the E(B-V) value from the Schlegel dust maps. Must set SFD_DIR environment
-    variable pointing to the Schlegel map FITS files directory prior to running.
+    variable pointing to the Schlegel map FITS files directory prior to running. The
+    factor of 0.86 divided out of the E(B-V) value is to convert if from the Schlafly &
+    Finkbeiner value to Schlegel, Finkbeiner, & Davis.
 
     INPUTS
     ------
