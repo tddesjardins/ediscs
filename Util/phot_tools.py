@@ -1,6 +1,20 @@
 from astropy.io.ascii import SExtractor
 from astropy.table import join
+
+import glob
 import os
+import shutil
+
+
+def copy_sexfiles():
+
+    sex_files = glob.glob(os.environ['SEXTRACTOR_PATH'])
+    ediscs_files = glob.glob(os.path.join(os.environ['EDISCS_REPO'], 'files', 'SExtractor')
+
+    for f in sex_files:
+        shutil.copy(f, '.')
+    for f in ediscs_files:
+        shutil.copy(f, '.')
 
 
 def phot_script(img_dict, detection_img='rimg', outfile=None, clobber=False):
