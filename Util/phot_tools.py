@@ -8,8 +8,8 @@ import shutil
 
 def copy_sexfiles():
 
-    sex_files = glob.glob(os.environ['SEXTRACTOR_PATH'])
-    ediscs_files = glob.glob(os.path.join(os.environ['EDISCS_REPO'], 'files', 'SExtractor')
+    sex_files = glob.glob(os.path.join(os.environ['SEXTRACTOR_PATH'], '*'))
+    ediscs_files = glob.glob(os.path.join(os.environ['EDISCS_REPO'], 'files', 'analysis', 'SExtractor', '*'))
 
     for f in sex_files:
         shutil.copy(f, '.')
